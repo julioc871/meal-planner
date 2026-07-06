@@ -1,0 +1,152 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MealSlot {
+  BREAKFAST
+  LUNCH
+  DINNER
+}
+
+enum UnitSystem {
+  METRIC
+  IMPERIAL
+}
+
+enum Unit {
+  // weight
+  GRAM
+  KILOGRAM
+  OUNCE
+  POUND
+  // volume
+  MILLILITER
+  LITER
+  TEASPOON
+  TABLESPOON
+  CUP
+  FLUID_OUNCE
+  // count
+  PIECE
+  CLOVE
+  PINCH
+}
+
+model User {
+  id         String            @id @default(cuid())
+  email      String            @unique
+  name       String?
+  unitPref   UnitSystem        @default(IMPERIAL)
+  createdAt  DateTime          @default(now())
+  households HouseholdMember[]
+}
+
+model Household {
+  id        String            @id @default(cuid())
+  name      String
+  createdAt DateTime          @default(now())
+  members   HouseholdMember[]
+  mealPlans MealPlan[]
+  recipes   Recipe[]
+}
+
+model HouseholdMember {
+  id          String    @id @default(cuid())
+  user        User      @relation(fields: [userId], references: [id])
+  userId      String
+  household   Household @relation(fields: [householdId], references: [id])
+  householdId String
+  role        String    @default("member") // "owner" | "member"
+
+  @@unique([userId, householdId])
+}
+
+model IngredientCategory {
+  id          String       @id @default(cuid())
+  name        String       @unique // "Produce", "Dairy", "Meat", "Pantry", etc.
+  sortOrder   Int          @default(0) // controls shopping-list order
+  ingredients Ingredient[]
+}
+
+// Master ingredient list - lets us map "tomato" to a category once
+// and reuse it across every recipe that calls for tomatoes
+model Ingredient {
+  id         String              @id @default(cuid())
+  name       String              @unique
+  category   IngredientCategory? @relation(fields: [categoryId], references: [id])
+  categoryId String?
+  recipeUses RecipeIngredient[]
+}
+
+model Recipe {
+  id           String             @id @default(cuid())
+  household    Household          @relation(fields: [householdId], references: [id])
+  householdId  String
+  name         String
+  sourceUrl    String?            // populated if imported via scraper
+  instructions String?            @db.Text
+  baseServings Int                @default(4) // the serving count the listed quantities are based on
+  createdAt    DateTime           @default(now())
+  ingredients  RecipeIngredient[]
+  plannedMeals PlannedMeal[]
+}
+
+// Quantities are stored in BOTH unit systems so scaling/conversion
+// doesn't need a live conversion step on every read
+model RecipeIngredient {
+  id               String     @id @default(cuid())
+  recipe           Recipe     @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  recipeId         String
+  ingredient       Ingredient @relation(fields: [ingredientId], references: [id])
+  ingredientId     String
+  quantityMetric   Float      // e.g. 500
+  unitMetric       Unit       // e.g. GRAM
+  quantityImperial Float      // e.g. 1.1
+  unitImperial     Unit       // e.g. POUND
+  notes            String?    // "diced", "room temperature", etc.
+}
+
+model MealPlan {
+  id          String        @id @default(cuid())
+  household   Household     @relation(fields: [householdId], references: [id])
+  householdId String
+  weekStart   DateTime      // store the Sunday date for that week
+  meals       PlannedMeal[]
+  groceryList GroceryList?
+
+  @@unique([householdId, weekStart])
+}
+
+model PlannedMeal {
+  id         String   @id @default(cuid())
+  mealPlan   MealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+  mealPlanId String
+  recipe     Recipe   @relation(fields: [recipeId], references: [id])
+  recipeId   String
+  dayOfWeek  Int      // 0 = Sunday ... 6 = Saturday
+  slot       MealSlot
+  servings   Int      // lets servings scale per-instance, independent of recipe.baseServings
+}
+
+model GroceryList {
+  id          String        @id @default(cuid())
+  mealPlan    MealPlan      @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+  mealPlanId  String        @unique
+  generatedAt DateTime      @default(now())
+  items       GroceryItem[]
+}
+
+model GroceryItem {
+  id            String      @id @default(cuid())
+  groceryList   GroceryList @relation(fields: [groceryListId], references: [id], onDelete: Cascade)
+  groceryListId String
+  ingredientName String     // denormalized snapshot, so list survives ingredient edits
+  quantity      Float
+  unit          Unit
+  category      String?     // denormalized category name, for shopping-order grouping
+  checked       Boolean     @default(false)
+}
