@@ -2,10 +2,7 @@ import { getAppSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { NextResponse } from "next/server";
 
-export async function GET(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function GET() {
   const session = await getAppSession();
   if (!session?.user?.householdId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -42,7 +39,6 @@ export async function POST(req: Request) {
       ingredients: {
         create: await Promise.all(
           ingredients.map(async (ing: any) => {
-            // Find or create the ingredient in the master list
             const ingredient = await db.ingredient.upsert({
               where: { name: ing.name.toLowerCase().trim() },
               update: {},
