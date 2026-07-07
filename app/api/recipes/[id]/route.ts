@@ -4,16 +4,18 @@ import { NextResponse } from "next/server";
 
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getAppSession();
   if (!session?.user?.householdId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { id } = await params;
+
   const recipe = await db.recipe.findFirst({
     where: {
-      id: params.id,
+      id,
       householdId: session.user.householdId,
     },
     include: {
