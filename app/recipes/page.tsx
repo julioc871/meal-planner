@@ -1,67 +1,69 @@
+import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import Link from "next/link";
-import { redirect, notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 import { getAppSession } from "@/lib/session";
 
-export default async function RecipeDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function RecipesPage() {
   const session = await getAppSession();
   if (!session?.user?.householdId) redirect("/");
 
-  const { id } = await params;
-
-  const recipe = await db.recipe.findFirst({
-    where: { id, householdId: session.user.householdId },
-    include: {
-      ingredients: {
-        include: { ingredient: { include: { category: true } } },
-      },
-    },
+  const recipes = await db.recipe.findMany({
+    where: { householdId: session.user.householdId },
+    include: { ingredients: true },
+    orderBy: { createdAt: "desc" },
   });
-
-  if (!recipe) notFound();
 
   return (
     <main style={{ padding: "2rem", fontFamily: "sans-serif", maxWidth: "800px", margin: "0 auto" }}>
-      <Link href="/recipes" style={{ color: "#6b7280", textDecoration: "none", fontSize: "0.9rem" }}>
-        ← Back to Recipes
-      </Link>
+      <div style={{ marginBottom: "1rem" }}>
+        <Link href="/calendar" style={{ color: "#6b7280", textDecoration: "none", fontSize: "0.9rem" }}>
+          ← Back to Calendar
+        </Link>
+      </div>
 
-      <h1 style={{ marginTop: "0.5rem" }}>{recipe.name}</h1>
-      <p style={{ color: "gray" }}>Serves {recipe.baseServings}</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h1 style={{ margin: 0 }}>Recipes</h1>
+        <Link
+          href="/recipes/new"
+          style={{
+            background: "#16a34a",
+            color: "white",
+            padding: "0.5rem 1rem",
+            borderRadius: "6px",
+            textDecoration: "none",
+          }}
+        >
+          + New Recipe
+        </Link>
+      </div>
 
-      <h2 style={{ marginTop: "1.5rem" }}>Ingredients</h2>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr style={{ borderBottom: "2px solid #e5e7eb", textAlign: "left" }}>
-            <th style={{ padding: "0.5rem" }}>Ingredient</th>
-            <th style={{ padding: "0.5rem" }}>Metric</th>
-            <th style={{ padding: "0.5rem" }}>Imperial</th>
-            <th style={{ padding: "0.5rem" }}>Notes</th>
-            <th style={{ padding: "0.5rem" }}>Category</th>
-          </tr>
-        </thead>
-        <tbody>
-          {recipe.ingredients.map((ri) => (
-            <tr key={ri.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
-              <td style={{ padding: "0.5rem", fontWeight: 500 }}>{ri.ingredient.name}</td>
-              <td style={{ padding: "0.5rem" }}>{ri.quantityMetric} {ri.unitMetric}</td>
-              <td style={{ padding: "0.5rem" }}>{ri.quantityImperial} {ri.unitImperial}</td>
-              <td style={{ padding: "0.5rem", color: "gray" }}>{ri.notes ?? "—"}</td>
-              <td style={{ padding: "0.5rem", color: "gray" }}>{ri.ingredient.category?.name ?? "Uncategorized"}</td>
-            </tr>
+      {recipes.length === 0 ? (
+        <p style={{ color: "gray", marginTop: "2rem" }}>
+          No recipes yet. Create your first one!
+        </p>
+      ) : (
+        <div style={{ display: "grid", gap: "1rem", marginTop: "1.5rem" }}>
+          {recipes.map((recipe) => (
+            <Link
+              key={recipe.id}
+              href={`/recipes/${recipe.id}`}
+              style={{
+                display: "block",
+                padding: "1rem 1.5rem",
+                border: "1px solid #e5e7eb",
+                borderRadius: "8px",
+                textDecoration: "none",
+                color: "inherit",
+              }}
+            >
+              <h2 style={{ margin: 0, fontSize: "1.1rem" }}>{recipe.name}</h2>
+              <p style={{ margin: "0.25rem 0 0", color: "gray", fontSize: "0.9rem" }}>
+                {recipe.ingredients.length} ingredients · serves {recipe.baseServings}
+              </p>
+            </Link>
           ))}
-        </tbody>
-      </table>
-
-      {recipe.instructions && (
-        <>
-          <h2 style={{ marginTop: "1.5rem" }}>Instructions</h2>
-          <p style={{ lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{recipe.instructions}</p>
-        </>
+        </div>
       )}
     </main>
   );

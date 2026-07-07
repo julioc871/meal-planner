@@ -1,18 +1,20 @@
-import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
+import { getAppSession } from "@/lib/session";
 
 export default async function RecipeDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  const session = await auth();
+  const session = await getAppSession();
   if (!session?.user?.householdId) redirect("/");
 
+  const { id } = await params;
+
   const recipe = await db.recipe.findFirst({
-    where: { id: params.id, householdId: session.user.householdId },
+    where: { id, householdId: session.user.householdId },
     include: {
       ingredients: {
         include: { ingredient: { include: { category: true } } },
